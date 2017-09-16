@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>[blinksmith] Faucet Rotator</title>
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/normalize/5.0.0/normalize.min.css"/>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+    <link href="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" rel="stylesheet"/>
+    <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+
+	
+</head>
+<body>
+
+
+<script>
+(function() {
+    'use strict';
+      //referral address
+	var freebitcoID = '6124727';
+	var freedogeID = '1093676';
+    var BTCref = '3N2y7j6zgu38BihSDKVV8vzYHac2Dzf5i3';
+	var referral = '3N2y7j6zgu38BihSDKVV8vzYHac2Dzf5i3';
+	
+    /*jshint sub:true*/
+    if(!localStorage['ids']) localStorage['ids']='';
+    localStorage['ids_on']='';
+    
+    $.each(localStorage['ids'].split(','), function (key, val) {
+        if(localStorage['id_'+val]){
+            var id = JSON.parse(localStorage['id_'+val]);
+            if(id.status!='ban'){
+                id.status = 'off';
+            }
+            localStorage['id_'+val] = JSON.stringify(id);
+        }
+    });
+
+    $.getJSON('https://blinkfaucet.firebaseio.com/allfaucet/.json', function( data ) {
+        $.each( data, function( key, val ) {
+           if($.inArray(key, localStorage['ids'].split(',')) < 0){
+               val.status = 'on';
+               val.time = 0;
+               localStorage['id_'+key] = JSON.stringify(val);
+               localStorage['ids'] = localStorage['ids']+key+',';
+               localStorage['ids_on'] = localStorage['ids_on']+key+',';
+           }else{
+               var id = JSON.parse(localStorage['id_'+key]);
+               id.timer = val.timer;
+               id.avg = val.avg;
+               id.h = val.h;
+               if(id.status!='ban'){
+                   localStorage['ids_on'] = localStorage['ids_on']+key+',';
+                   id.status = 'on';
+               }
+               localStorage['id_'+key] = JSON.stringify(id);
+           }
+        });
+
+        $(document).ready(function() {
+            $.each(localStorage['ids_on'].split(','), function (key, val) {
+                insert(val);
+            });
+            calc();
+        });
+    });
+    
+    
+    function calc() {
+        var pc = 0;
+        var ph = 0;
+        $.each($('#table tbody tr'), function (index) {
+            var tr = $(this);
+            pc = pc + tr.find('.per_claim').text()*1;
+            ph = ph + tr.find('.per_hour').text()*1;
+        });
+
+        $('#pc').text(pc);
+        $('#ph').text(ph);
+    }
+
+
+    
+    
+    function insert(id) {
+        $('#table tbody #id_'+id).remove();
+        if(localStorage['id_'+id]){
+            var row = JSON.parse(localStorage['id_'+id]);
+
+            if(row.status == 'ban') return false;
+
+            var insert = "<tr class='warning' id='id_"+id+"'>"+
+                                "<td class='text-center index'>"+id+"</td>"+
+                                "<td class='url'>"+getHostname(row.url)+"</td>"+
+                                "<td class='text-right timer'>"+row.timer+"</td>"+
+                                "<td class='text-right per_claim'>"+row.avg+"</td>"+
+                                "<td class='text-right per_hour'>"+row.h+"</td>"+
+                                "<td class='text-center last' data-time='"+row.time+"'></td>"+
+                                "<td class='text-center action'>"+
+                                    "<button type='button' class='btn btn-danger btn-xs ban'>Ban</button> "+
+                                    "<div class='btn-group'>"+
+                                        "<button type='button' class='btn btn-warning btn-xs dropdown-toggle' data-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>Skip <span class='caret'></span></button>"+
+                                        "<ul class='dropdown-menu'>"+
+                                            "<li><a class='skip' data-skip='10'   style='cursor: pointer'>10 mins</a></li>"+
+                                            "<li><a class='skip' data-skip='30'   style='cursor: pointer'>30 mins</a></li>"+
+                                            "<li><a class='skip' data-skip='60'   style='cursor: pointer'>60 mins</a></li>"+
+                                            "<li><a class='skip' data-skip='720'  style='cursor: pointer'>12 hours</a></li>"+
+                                            "<li><a class='skip' data-skip='1440' style='cursor: pointer'>24 hours</a></li>"+
+                                        "</ul>"+
+                                    "</div> "+
+                                    "<button type='button' class='btn btn-success btn-xs claim'>Claim</button>"+
+                                "</td>"+
+                          "</tr>";
+
+            var start = 0;
+            var end = 0;
+            $.each($('#table tbody tr'), function (index) {
+                var last = $(this).find('.last').data('time');
+                if(row.time < last){
+                    start = this.id;
+                    return false;
+                }else{
+                    end = this.id;
+                }
+            });
+
+            if(start==0 && end==0){
+                $('#table tbody').append(insert);
+            }else if(start==0){
+                $('#table tbody #'+end).after(insert);
+            }else{
+                $('#table tbody #'+start).before(insert);
+            }
+        }
+    }
+
+    setInterval(function () {
+        $.each($('#table tbody tr'), function (index) {
+            var last = $(this).find('.last');
+            var tr = $(this);
+            if(last.data('time')-new Date().getTime() < 0){
+                last.text('00:00:00');
+                tr.removeClass('warning danger').addClass('success');
+            }else{
+                tr.removeClass('warning').addClass('danger');
+                var delta = Math.round((last.data('time')-new Date().getTime())/1000);
+                var hours = Math.floor(delta / 3600) % 24;
+                delta -= hours * 3600;
+                var minutes = Math.floor(delta / 60) % 60;
+                delta -= minutes * 60;
+                var seconds = delta % 60;
+                last.text((hours<10?'0':'')+hours+':'+(minutes<10?'0':'')+minutes+':'+(seconds<10?'0':'')+seconds);
+            }
+        });
+    }, 1000);
+
+    function getHostname(href) {
+        var l = document.createElement("a");
+        l.href = href;
+        return l.hostname;
+    }
+
+    $(document).on('click', '.skip', function () {
+        var current = $(this).parent().parent().parent().parent().parent().attr('id');
+        var skip = $(this).data('skip');
+        var id = JSON.parse(localStorage[current]);
+        id.time = new Date().getTime() + skip*60*1000;
+        localStorage[current] = JSON.stringify(id);
+        insert(current.replace('id_', ''));
+    });
+
+    $(document).on('click', '.ban', function () {
+        var current = $(this).parent().parent().attr('id');
+        var id = JSON.parse(localStorage[current]);
+        id.status = 'ban';
+        localStorage[current] = JSON.stringify(id);
+        insert(current.replace('id_', ''));
+    });
+
+    $(document).on('click', '.claim', function () {
+        var current = $(this).parent().parent().attr('id');
+        var id = JSON.parse(localStorage[current]);
+        id.time = new Date().getTime() + id.timer*60*1000+60000;
+        localStorage[current] = JSON.stringify(id);
+        insert(current.replace('id_', ''));
+		window.open(id.url.replace('%freebitcoID%', freebitcoID).replace('%freedogeID%', freedogeID).replace('%BTCref%', BTCref));
+    });
+
+    $(document).on('click', '#wipe', function () {
+        localStorage.clear();
+        location.reload();
+    });
+
+})();
+</script>
+
+    <nav class="navbar navbar-default navbar-static-top">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="#">[blinksmith] Faucet Rotator</a>
+            </div>
+            <div id="navbar" class="navbar-collapse collapse">
+                <div class="navbar-form navbar-right">
+                    <button type="submit" class="btn btn-danger" id="wipe">Wipe Local Storage</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-12">
+
+                <div class="panel panel-default">
+                    <div class="panel-heading text-center">
+                        <h3 class="panel-title"></h3>
+                    </div>
+                    <div class="panel-body">
+                        <table class="table table-hover" id="table" data-toggle="table" data-sort-name="avg" data-sort-order="desc">
+                            <thead>
+                            <tr>
+                                <th class="text-center" data-sortable="false" data-field="number">#</th>
+								<th class="text-center" data-sortable="true" data-field="name">faucet</th>
+								<th class="text-right" data-sortable="true" data-field="timer">timer</th>
+								<th class="text-right" data-sortable="true" data-field="claim">per claim<sup id="pc">0</sup></th>
+								<th class="text-right" data-sortable="true" data-field="h">per hour<sup id="ph">0</sup></th>
+								<th class="text-center" data-sortable="true" >next claim</th>
+								<th class="text-center" data-sortable="false">action</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+
+            </div>
+        </div>
+    </div>
+	<script>
+
+	</script>
+</body>
+</html>
